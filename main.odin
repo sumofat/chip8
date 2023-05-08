@@ -45,27 +45,26 @@ pop :: proc()->u16{
 	return value
 }
 
-//keymap for input
-//keymap : [16]byte = {0x1,0x2,0x3,0xC,0x4,0x5,0x6,0xD,0x7,0x8,0x9,0xE,0xA,0x0,0xB,0xF}
 keymap : [16]byte
+
 //keymap enum
 keymap_enum :: enum{
+	zero = 0x0,
 	one = 0x1,
 	two = 0x2,
 	three = 0x3,
-	four = 0xC,
-	q = 0x4,
-	w = 0x5,
-	e = 0x6,
-	r = 0xD,
-	a = 0x7,
-	s = 0x8,
-	d = 0x9,
-	f = 0xE,
-	z = 0xA,
-	x = 0x0,
-	c = 0xB,
-	v = 0xF,
+	four = 0x4,
+	five = 0x5,
+	six = 0x6,
+	seven = 0xe,
+	eight = 0x8,
+	nine = 0x9,
+	a = 0xa,
+	b = 0xb,
+	c = 0xc,
+	d = 0xd,
+	e = 0xe,
+	f = 0xf,
 }
 
 //display 
@@ -156,7 +155,7 @@ main :: proc(){
 	rl.InitWindow(640,320,"chip8")
 	rl.SetTargetFPS(60)
 	for !rl.WindowShouldClose(){
-		for nothing in 0..=10{
+		for nothing in 0..= 10{
 		//emulate cycle
 		//delay timer
 		if dt > 0{
@@ -205,7 +204,7 @@ main :: proc(){
 		//fmt.println("nopcode: ", nopcode)
 		//fmt.println("opcode_first_byte: ", opcode_first_byte)
 		//fmt.printf("opcode: %x %x\n", opcode_first_byte, opcode_second_byte)
-		fmt.printf("%x %x\n", opcode_first_byte, opcode_second_byte)
+		//fmt.printf("%x %x\n", opcode_first_byte, opcode_second_byte)
 		//fmt.printf("NNN para : %x\n", (opcode & 0x0FFF))
 
 		switch opcode_first_byte{
@@ -398,23 +397,52 @@ main :: proc(){
 				//draw sprite at vx,vy with height n
 				reg_num_x := (opcode & 0x0F00) >> 8
 				reg_num_y := (opcode & 0x00F0) >> 4
-				reg_val_x := (v[reg_num_x])
-				reg_val_y := (v[reg_num_y])
+				reg_val_x := (v[reg_num_x]) % 64
+				reg_val_y := (v[reg_num_y]) % 32
 				height := (opcode & 0x000F)
-				v[0xF] = 0
 				for yline : u16= 0; yline < height; yline+=1{
 					pixel := ram[ir + yline]
+					ypos := (reg_val_y + yline)
+					if ypos > 31{
+						break
+					}
 					for xline : u16 = 0; xline < 8; xline +=1{
-						if (pixel & (0x80 >> xline)) != 0{
-							pos := ((reg_val_x + xline) + ((reg_val_y + yline) *64 ))
-							if pos > 2048{
-								pos = pos % 2048
-							}
-							if display[pos] == 1{
-								v[0xF] = 1
-							}
-							display[pos] = 255
+						xpos := (reg_val_x + xline)
+						if xpos > 63{
+							break
 						}
+						pos := (xpos + (ypos) * 64 )
+
+						pixel_value := (pixel & (0x80 >> xline))
+						display_value := display[pos]
+
+						if pixel_value != 0 {
+							pixel_value = 0xFF
+						}
+						if pixel_value != 0{
+							//if display_value != 0 && pixel_value != 0{
+							if display_value != 0{
+								//collision flag
+								display[pos] = 0
+								v[0xF] = 1
+							}else{
+								display[pos] = 0xFF
+								v[0xF] = 0
+							}
+						}
+
+						//display[pos] = display_value ~ pixel_value
+						//write dispaly value with xoring the current pixel value
+						/*
+						//if (pixel & (0x80 >> xline)) != 0{
+							//display[pos] = 0xFF ~ display[pos]
+							if display[pos] == 0xFF{
+								display[pos] = 0
+							}else{
+								display[pos] = 0xFF
+							}
+						//}
+						*/
 					}
 				}
 			}
@@ -425,18 +453,18 @@ main :: proc(){
 				opcode_second := opcode & 0x00FF
 				fmt.println(reg_val)
 				if opcode_second == 0x9E{
-					fmt.println("Check if key is down")
+					//fmt.printf("is down %v",reg_val)
 					if keymap[reg_val] != 0{
-						fmt.println("key is down-------------------------")
+						//fmt.println("key is down-------------------------")
 						pc = pc + 2
 					}
-				}
-				if opcode_second == 0xA1{
-					fmt.println("Check if key is up")
+				}else if opcode_second == 0xA1{
 					if keymap[reg_val] == 0{
-						fmt.println("key is up -------------------------- ")
+						//fmt.println("key is up -------------------------- ")
 						pc = pc + 2
 					}
+				}else{
+					assert(false, "Unknown opcode")
 				}
 			}
 			case 0xF:{
@@ -446,7 +474,7 @@ main :: proc(){
 				if (opcode & 0x00FF) == 0x07{
 					v[reg_num] = dt
 				}else if (opcode & 0x00FF) == 0x0A{
-					fmt.println("Check if key is holding process")
+					//fmt.println("Check if key is holding process")
 					key_press := false
 					for i : u16 = 0; i < 16; i += 1{
 						if keymap[i] != 0{
@@ -489,36 +517,54 @@ main :: proc(){
 			}
 		}
 
-	//set keypress to keymap
-	if rl.IsKeyDown(rl.KeyboardKey.ZERO){
-		keymap[0x0] = 1
-	}else if rl.IsKeyReleased(rl.KeyboardKey.ZERO){
-		keymap[0x0] = 0
-	}
+		//set keypress to keymap
 
-	if rl.IsKeyDown(rl.KeyboardKey.ONE){
-		keymap[0x1] = 1
-	}else if rl.IsKeyReleased(rl.KeyboardKey.ONE){
-		fmt.println("key released")
-		keymap[0x1] = 0
-	}
+		if rl.IsKeyDown(rl.KeyboardKey.ONE){
+			keymap[keymap_enum.one] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.ONE){
+			keymap[keymap_enum.one] = 0
+		}
+		/*
+		if rl.IsKeyDown(rl.KeyboardKey.ZERO){
+			keymap[keymap_enum.zero] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.ZERO){
+			keymap[keymap_enum.zero] = 0
+		}
 
-	if rl.IsKeyDown(rl.KeyboardKey.TWO){
-		keymap[0x2] = 1
-	}else if rl.IsKeyReleased(rl.KeyboardKey.TWO){
-		keymap[0x2] = 0
-	}
-	if rl.IsKeyDown(rl.KeyboardKey.THREE){
-		keymap[0x3] = 1
-	}else if rl.IsKeyReleased(rl.KeyboardKey.THREE){
-		keymap[0x3] = 0
-	}
-	if rl.IsKeyDown(rl.KeyboardKey.FOUR){
-		keymap[0x4] = 1
-	}else if rl.IsKeyReleased(rl.KeyboardKey.FOUR){
-		keymap[0x4] = 0
-	}
+		if rl.IsKeyDown(rl.KeyboardKey.TWO){
+			keymap[keymap_enum.two] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.TWO){
+			keymap[keymap_enum.two] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.THREE){
+			keymap[0x3] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.THREE){
+			keymap[] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.FOUR){
+			keymap[0x4] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.FOUR){
+			keymap[0x4] = 0
+		}
+		*/
 
+		if rl.IsKeyDown(rl.KeyboardKey.F){
+			keymap[keymap_enum.e] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.F){
+			keymap[keymap_enum.e] = 0
+		}
+
+		if rl.IsKeyDown(rl.KeyboardKey.V){
+			keymap[keymap_enum.f] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.V){
+			keymap[keymap_enum.f] = 0
+		}
+
+		if rl.IsKeyDown(rl.KeyboardKey.Z){
+			keymap[keymap_enum.a] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.Z){
+			keymap[keymap_enum.a] = 0
+		}
 	}
 
 	rl.BeginDrawing()
