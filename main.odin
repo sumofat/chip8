@@ -272,7 +272,7 @@ main :: proc(){
 				fmt.println("v[reg_num]: ", v[reg_num])
 				*/
 				//add the number together as 8 bit numbers the result is always a 256 modulo 
-				v[reg_num] = (v[reg_num] + value) % 256
+				v[reg_num] = (v[reg_num] + value) & 0x00FF
 				//fmt.println("v[reg_num]: ", v[reg_num])
 			}
 			case 0x8:{
@@ -313,9 +313,11 @@ main :: proc(){
 					reg_num_y := (opcode & 0x00F0) >> 4
 					reg_val_x := v[reg_num_x]
 					reg_val_y := v[reg_num_y]
-					v[reg_num_x] = (reg_val_x + reg_val_y) % 256
-					if reg_val_x + reg_val_y > 255{
+					v[reg_num_x] = (reg_val_x + reg_val_y) & 0x00FF 	
+					if (reg_val_x + reg_val_y) > 0xFF{
 						v[0xF] = 1
+					}else{
+						v[0xF] = 0
 					}
 				}else if opcode_second == 0x5{
 					//set vx to vx - vy
@@ -324,20 +326,17 @@ main :: proc(){
 					reg_val_x := v[reg_num_x]
 					reg_val_y := v[reg_num_y]
 					v[reg_num_x] = (reg_val_x - reg_val_y) % 256
-					if reg_val_x < reg_val_y{
-						v[0xF] = 0
-					}else{
+					if reg_val_x > reg_val_y{
 						v[0xF] = 1
+					}else{
+						v[0xF] = 0
 					}
 				}else if opcode_second == 0x6{
 					//set vx to vy >> 1
 					reg_num_x := (opcode & 0x0F00) >> 8
 					reg_num_y := (opcode & 0x00F0) >> 4
 					reg_val_y := v[reg_num_y]
-					v[reg_num_x] = (reg_val_y >> 1) % 256
-					//temp := v[reg_num_x]
-					//v[reg_num_x] = v[reg_num_x] >> 1 % 256
-					//v[0xF] = temp & 0x01
+					v[reg_num_x] = (reg_val_y >> 1) & 0x00FF
 					v[0xF] = reg_val_y & 0x01
 				}
 				else if opcode_second == 0x7{
@@ -347,10 +346,10 @@ main :: proc(){
 					reg_val_x := v[reg_num_x]
 					reg_val_y := v[reg_num_y]
 					v[reg_num_x] = (reg_val_y - reg_val_x) % 256
-					if reg_val_y < reg_val_x{
-						v[0xF] = 0
-					}else{
+					if reg_val_x < reg_val_y {
 						v[0xF] = 1
+					}else{
+						v[0xF] = 0
 					}
 				}
 				else if opcode_second == 0xE{
@@ -358,10 +357,7 @@ main :: proc(){
 					reg_num_x := (opcode & 0x0F00) >> 8
 					reg_num_y := (opcode & 0x00F0) >> 4
 					reg_val_y := v[reg_num_y]
-					//temp := v[reg_num_x]
-					//v[reg_num_x] = (v[reg_num_x] << 1) % 256
-					v[reg_num_x] = (reg_val_y << 1) % 256
-					//v[0xF] = (temp & 0x80) >> 7
+					v[reg_num_x] = (reg_val_y << 1) & 0x00FF
 					v[0xF] = (reg_val_y & 0x80) >> 7
 				}
 			}
@@ -394,6 +390,7 @@ main :: proc(){
 				v[reg_num] = (rn & (opcode & 0x00FF))
 			}
 			case 0xD:{
+				//v[0xF] = 0
 				//draw sprite at vx,vy with height n
 				reg_num_x := (opcode & 0x0F00) >> 8
 				reg_num_y := (opcode & 0x00F0) >> 4
@@ -419,6 +416,7 @@ main :: proc(){
 						if pixel_value != 0 {
 							pixel_value = 0xFF
 						}
+						/*
 						if pixel_value != 0{
 							//if display_value != 0 && pixel_value != 0{
 							if display_value != 0{
@@ -427,8 +425,17 @@ main :: proc(){
 								v[0xF] = 1
 							}else{
 								display[pos] = 0xFF
-								v[0xF] = 0
+								//v[0xF] = 0
 							}
+						}
+						*/
+
+						display[pos] = pixel_value ~ display_value
+						if pixel_value != 0 && display_value != 0{
+							//collision flag
+							v[0xF] = 1
+						}else{
+							v[0xF] = 0
 						}
 
 						//display[pos] = display_value ~ pixel_value
@@ -451,7 +458,7 @@ main :: proc(){
 				reg_num := (opcode & 0x0F00) >> 8
 				reg_val := v[reg_num]
 				opcode_second := opcode & 0x00FF
-				fmt.println(reg_val)
+				//fmt.println(reg_val)
 				if opcode_second == 0x9E{
 					//fmt.printf("is down %v",reg_val)
 					if keymap[reg_val] != 0{
