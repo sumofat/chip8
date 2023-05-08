@@ -56,7 +56,7 @@ keymap_enum :: enum{
 	four = 0x4,
 	five = 0x5,
 	six = 0x6,
-	seven = 0xe,
+	seven = 0x7,
 	eight = 0x8,
 	nine = 0x9,
 	a = 0xa,
@@ -122,40 +122,40 @@ main :: proc(){
 	}
 
 	fonts : [80]byte = {0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-    0x20, 0x60, 0x20, 0x20, 0x70, // 1
-    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-	}
+	0x20, 0x60, 0x20, 0x20, 0x70, // 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+}
 
-	ram_fonts := ram[0:80]
-	for b,i in &ram_fonts{
-		b = fonts[i]
-	}
+ram_fonts := ram[0:80]
+for b,i in &ram_fonts{
+	b = fonts[i]
+}
 
-	//load the rom into memory
-	for b,i in &rom_file{
-		ram[int(pc)+i] = b
-	}
+//load the rom into memory
+for b,i in &rom_file{
+	ram[int(pc)+i] = b
+}
 
-	rand_num : rand.Rand
-	rand.init(&rand_num,12345)
+rand_num : rand.Rand
+rand.init(&rand_num,12345)
 
-	rl.InitWindow(640,320,"chip8")
-	rl.SetTargetFPS(60)
-	for !rl.WindowShouldClose(){
-		for nothing in 0..= 10{
+rl.InitWindow(640,320,"chip8")
+rl.SetTargetFPS(60)
+for !rl.WindowShouldClose(){
+	for nothing in 0..=10{
 		//emulate cycle
 		//delay timer
 		if dt > 0{
@@ -276,6 +276,7 @@ main :: proc(){
 				//fmt.println("v[reg_num]: ", v[reg_num])
 			}
 			case 0x8:{
+				//COSMAC based variants reset vf to 0 before the operation
 				opcode_second := opcode & 0x000F
 				if opcode_second == 0x0{
 					//set vx to vy
@@ -325,11 +326,11 @@ main :: proc(){
 					reg_num_y := (opcode & 0x00F0) >> 4
 					reg_val_x := v[reg_num_x]
 					reg_val_y := v[reg_num_y]
-					v[reg_num_x] = (reg_val_x - reg_val_y) % 256
-					if reg_val_x > reg_val_y{
-						v[0xF] = 1
-					}else{
+					v[reg_num_x] = (reg_val_x - reg_val_y) & 0x00FF
+					if reg_val_x < reg_val_y{
 						v[0xF] = 0
+					}else{
+						v[0xF] = 1
 					}
 				}else if opcode_second == 0x6{
 					//set vx to vy >> 1
@@ -345,11 +346,11 @@ main :: proc(){
 					reg_num_y := (opcode & 0x00F0) >> 4
 					reg_val_x := v[reg_num_x]
 					reg_val_y := v[reg_num_y]
-					v[reg_num_x] = (reg_val_y - reg_val_x) % 256
-					if reg_val_x < reg_val_y {
-						v[0xF] = 1
-					}else{
+					v[reg_num_x] = (reg_val_y - reg_val_x) & 0x00FF
+					if reg_val_x > reg_val_y {
 						v[0xF] = 0
+					}else{
+						v[0xF] = 1
 					}
 				}
 				else if opcode_second == 0xE{
@@ -367,7 +368,9 @@ main :: proc(){
 				reg_num_y := (opcode & 0x00F0) >> 4
 				reg_val_x := v[reg_num_x]
 				reg_val_y := v[reg_num_y]
-				v[reg_num_x] = reg_val_x | reg_val_y
+				if reg_val_x != reg_val_y{
+					pc += 2
+				}
 			}
 			case 0xA:{
 				//set i to nnn
@@ -376,11 +379,6 @@ main :: proc(){
 			case 0xB:{
 				//jump to nnn + vN where N is teh highest nibble of NNN
 				//reg_num := (opcode & 0x0F00) >> 8
-				//pc = (opcode & 0x0FFF) + v[reg_num]
-
-				//jump to nnn + vN where N is teh highest nibble of NNN
-				//reg_num := (opcode & 0x0F00) >> 8
-
 				pc = (opcode & 0x0FFF) + v[0]
 			}
 			case 0xC:{
@@ -390,7 +388,7 @@ main :: proc(){
 				v[reg_num] = (rn & (opcode & 0x00FF))
 			}
 			case 0xD:{
-				//v[0xF] = 0
+				v[0xF] = 0
 				//draw sprite at vx,vy with height n
 				reg_num_x := (opcode & 0x0F00) >> 8
 				reg_num_y := (opcode & 0x00F0) >> 4
@@ -405,51 +403,24 @@ main :: proc(){
 					}
 					for xline : u16 = 0; xline < 8; xline +=1{
 						xpos := (reg_val_x + xline)
-						if xpos > 63{
-							break
-						}
 						pos := (xpos + (ypos) * 64 )
 
 						pixel_value := (pixel & (0x80 >> xline))
+						if xpos > 63{
+							break
+						}
+
 						display_value := display[pos]
 
-						if pixel_value != 0 {
+						if pixel_value > 0 {
 							pixel_value = 0xFF
 						}
-						/*
-						if pixel_value != 0{
-							//if display_value != 0 && pixel_value != 0{
-							if display_value != 0{
-								//collision flag
-								display[pos] = 0
-								v[0xF] = 1
-							}else{
-								display[pos] = 0xFF
-								//v[0xF] = 0
-							}
-						}
-						*/
 
-						display[pos] = pixel_value ~ display_value
+						display[pos] = display_value ~ pixel_value
 						if pixel_value != 0 && display_value != 0{
 							//collision flag
 							v[0xF] = 1
-						}else{
-							v[0xF] = 0
 						}
-
-						//display[pos] = display_value ~ pixel_value
-						//write dispaly value with xoring the current pixel value
-						/*
-						//if (pixel & (0x80 >> xline)) != 0{
-							//display[pos] = 0xFF ~ display[pos]
-							if display[pos] == 0xFF{
-								display[pos] = 0
-							}else{
-								display[pos] = 0xFF
-							}
-						//}
-						*/
 					}
 				}
 			}
@@ -459,13 +430,13 @@ main :: proc(){
 				reg_val := v[reg_num]
 				opcode_second := opcode & 0x00FF
 				//fmt.println(reg_val)
-				if opcode_second == 0x9E{
+				if opcode_second == 0x009E{
 					//fmt.printf("is down %v",reg_val)
 					if keymap[reg_val] != 0{
 						//fmt.println("key is down-------------------------")
 						pc = pc + 2
 					}
-				}else if opcode_second == 0xA1{
+				}else if opcode_second == 0x00A1{
 					if keymap[reg_val] == 0{
 						//fmt.println("key is up -------------------------- ")
 						pc = pc + 2
@@ -531,7 +502,6 @@ main :: proc(){
 		}else if rl.IsKeyUp(rl.KeyboardKey.ONE){
 			keymap[keymap_enum.one] = 0
 		}
-		/*
 		if rl.IsKeyDown(rl.KeyboardKey.ZERO){
 			keymap[keymap_enum.zero] = 1
 		}else if rl.IsKeyReleased(rl.KeyboardKey.ZERO){
@@ -544,60 +514,101 @@ main :: proc(){
 			keymap[keymap_enum.two] = 0
 		}
 		if rl.IsKeyDown(rl.KeyboardKey.THREE){
-			keymap[0x3] = 1
+			keymap[keymap_enum.three] = 1
 		}else if rl.IsKeyReleased(rl.KeyboardKey.THREE){
-			keymap[] = 0
+			keymap[keymap_enum.three] = 0
 		}
 		if rl.IsKeyDown(rl.KeyboardKey.FOUR){
-			keymap[0x4] = 1
+			keymap[keymap_enum.four] = 1
 		}else if rl.IsKeyReleased(rl.KeyboardKey.FOUR){
-			keymap[0x4] = 0
+			keymap[keymap_enum.four] = 0
 		}
-		*/
+
+		if rl.IsKeyDown(rl.KeyboardKey.FIVE){
+			keymap[keymap_enum.five] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.FIVE){
+			keymap[keymap_enum.five] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.SIX){
+			keymap[keymap_enum.six] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.SIX){
+			keymap[keymap_enum.six] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.SEVEN){
+			keymap[keymap_enum.seven] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.SEVEN){
+			keymap[keymap_enum.seven] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.EIGHT){
+			keymap[keymap_enum.eight] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.EIGHT){
+			keymap[keymap_enum.eight] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.NINE){
+			keymap[keymap_enum.nine] = 1
+		}else if rl.IsKeyReleased(rl.KeyboardKey.NINE){
+			keymap[keymap_enum.nine] = 0
+		}
 
 		if rl.IsKeyDown(rl.KeyboardKey.F){
-			keymap[keymap_enum.e] = 1
-		}else if rl.IsKeyUp(rl.KeyboardKey.F){
-			keymap[keymap_enum.e] = 0
-		}
-
-		if rl.IsKeyDown(rl.KeyboardKey.V){
 			keymap[keymap_enum.f] = 1
-		}else if rl.IsKeyUp(rl.KeyboardKey.V){
+		}else if rl.IsKeyUp(rl.KeyboardKey.F){
 			keymap[keymap_enum.f] = 0
 		}
 
-		if rl.IsKeyDown(rl.KeyboardKey.Z){
+		if rl.IsKeyDown(rl.KeyboardKey.E){
+			keymap[keymap_enum.e] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.E){
+			keymap[keymap_enum.e] = 0
+		}
+
+		if rl.IsKeyDown(rl.KeyboardKey.A){
 			keymap[keymap_enum.a] = 1
-		}else if rl.IsKeyUp(rl.KeyboardKey.Z){
+		}else if rl.IsKeyUp(rl.KeyboardKey.A){
 			keymap[keymap_enum.a] = 0
 		}
-	}
+		if rl.IsKeyDown(rl.KeyboardKey.B){
+			keymap[keymap_enum.b] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.B){
+			keymap[keymap_enum.b] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.C){
+			keymap[keymap_enum.c] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.C){
+			keymap[keymap_enum.c] = 0
+		}
+		if rl.IsKeyDown(rl.KeyboardKey.D){
+			keymap[keymap_enum.d] = 1
+		}else if rl.IsKeyUp(rl.KeyboardKey.D){
+			keymap[keymap_enum.d] = 0
+		}
+
+	}//for execute
 
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.BLACK)
 
-		x,y : i32
-		for pixel,i in &display{
-			if x == 0 && y == 0{
-				rl.DrawRectangle(x,y,10,10,rl.RED)
-			}else if x == 640 - 10 && y == 320 - 10{
-				rl.DrawRectangle(x,y,10,10,rl.GREEN)
-			}else{
-				color := rl.Color{pixel,pixel,pixel,255}
-				rl.DrawRectangle(x,y,10,10,color)
-			}
-			x += 10
-			//after 32 pixels go to next line
-			if x % 640 == 0{
-				x = 0
-				y += 10
-			}
+	x,y : i32
+	for pixel,i in &display{
+		if x == 0 && y == 0{
+			rl.DrawRectangle(x,y,10,10,rl.RED)
+		}else if x == 640 - 10 && y == 320 - 10{
+			rl.DrawRectangle(x,y,10,10,rl.GREEN)
+		}else{
+			color := rl.Color{pixel,pixel,pixel,255}
+			rl.DrawRectangle(x,y,10,10,color)
 		}
-
-		rl.EndDrawing()
+		x += 10
+		//after 32 pixels go to next line
+		if x % 640 == 0{
+			x = 0
+			y += 10
+		}
 	}
 
-	rl.CloseWindow()
+	rl.EndDrawing()
+}//ishwindowd clow
 
-}
+rl.CloseWindow()
+
+}//main
