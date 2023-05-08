@@ -5,6 +5,9 @@ import os "core:os"
 import m "core:math/linalg/hlsl"
 import rl "vendor:raylib"
 import rand "core:math/rand"
+import ma "vendor:miniaudio"
+import c "core:c"
+import mem "core:mem"
 
 ram : [4096]byte
 
@@ -109,9 +112,37 @@ opcodes :: enum{
 	ld10 = 0xF065,
 }
 
+base_freq : f32 = 100
+freq : f32 = base_freq
+audio_freq : f32 = base_freq
+old_freq : f32 = 1 
+sine_idx : f32 = 0
+
+audio_callback :: proc(buffer : rawptr,frames : c.uint){
+	//TODO
+	audio_freq = freq + (audio_freq - freq) * 0.95
+	audio_freq += 1.0
+	audio_freq -= 1.0
+	incr := audio_freq / 44100.0
+	d := buffer
+
+	for i in 0..=frames{
+		dptr := mem.ptr_offset((^byte)(d),i)
+		//value :=  u8(m.sin_float(2 * m.PI * sine_idx) * 255)
+		//fmt.println(value)
+		//NOTE(Ray):Not for sure how to make this work with raylib right now so just putting 
+		//some random number for a solid tone beep
+		dptr^ = 100//byte(value )//byte(32000 * m.sin_float(2 * m.PI * sine_idx)) 
+		sine_idx += incr
+		if sine_idx > 1{
+			sine_idx -= 1
+		}
+	}
+}
+
 main :: proc(){
 	//load rom from disk
-	//get the rom name from the command line assume it to be the first argument
+	//get the rom name from the command line adptrssume it to be the first argument
 	rom_name := os.args[1]
 	//open the file
 	rom_file,ok := os.read_entire_file_from_filename(rom_name)
@@ -154,19 +185,57 @@ rand.init(&rand_num,12345)
 
 rl.InitWindow(640,320,"chip8")
 rl.SetTargetFPS(60)
+rl.InitAudioDevice()
+
+max_samples : i32 = 512
+max_samples_per_update : i32 = 4096
+rl.SetAudioStreamBufferSizeDefault(max_samples_per_update)
+
+//audio stream
+stream := rl.LoadAudioStream(44100,16,1)
+audio_callback_proc : rl.AudioCallback = rl.AudioCallback(audio_callback)
+rl.SetAudioStreamCallback(stream,audio_callback_proc)
+
+data := make([]byte,max_samples)
+write_buf := make([]byte,max_samples_per_update)
+//rl.PlayAudioStream(stream)
+
+wavelength := 1
+
 for !rl.WindowShouldClose(){
+	if freq != old_freq{
+		wavelength = int(22050/freq)
+		if i32(wavelength) > max_samples/2{
+			wavelength = int(max_samples/2)
+		}
+		if wavelength < 1{
+			wavelength = 1
+		}
+
+		for i in 0..=(wavelength * 2) - 1{
+			data[i] = byte(m.sin_float(2 * m.PI * (f32(i) / f32(wavelength))) * 32000.0)
+		}
+		//make the rest of teh line is flat 
+		for j in wavelength * 2..=int(max_samples) - 1{
+			data[j] = 0
+		}
+		old_freq = freq
+	}
+	//delay timer
+	if dt > 0{
+		dt -= 1
+		rl.PlayAudioStream(stream)
+	}else{
+		rl.StopAudioStream(stream)
+	}
+	//dt value can be read into register from fx15 and fx07
+	//sound timer
+	if st > 0{
+		//will sound buzzer when decremented
+		st -= 1
+	}
 	for nothing in 0..=10{
 		//emulate cycle
-		//delay timer
-		if dt > 0{
-			dt -= 1
-		}
-		//dt value can be read into register from fx15 and fx07
-		//sound timer
-		if st > 0{
-			//will sound buzzer when decremented
-			st -= 1
-		}
 		//st value can be set from fx18
 		//36 instructions by convention all start with even addresses
 		//each instruction is 2 bytes long
