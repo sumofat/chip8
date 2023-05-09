@@ -49,6 +49,7 @@ pop :: proc()->u16{
 }
 
 keymap : [16]byte
+halting_keymap : [16]byte
 
 //keymap enum
 keymap_enum :: enum{
@@ -112,7 +113,7 @@ opcodes :: enum{
 	ld10 = 0xF065,
 }
 
-base_freq : f32 = 100
+base_freq : f32 = 440
 freq : f32 = base_freq
 audio_freq : f32 = base_freq
 old_freq : f32 = 1 
@@ -126,13 +127,9 @@ audio_callback :: proc(buffer : rawptr,frames : c.uint){
 	incr := audio_freq / 44100.0
 	d := buffer
 
-	for i in 0..=frames{
-		dptr := mem.ptr_offset((^byte)(d),i)
-		//value :=  u8(m.sin_float(2 * m.PI * sine_idx) * 255)
-		//fmt.println(value)
-		//NOTE(Ray):Not for sure how to make this work with raylib right now so just putting 
-		//some random number for a solid tone beep
-		dptr^ = 100//byte(value )//byte(32000 * m.sin_float(2 * m.PI * sine_idx)) 
+	for i in 0..=frames - 1{
+		dptr := mem.ptr_offset((^u16)(d),i)
+		dptr^ = u16(32000 * m.sin_float(2 * m.PI * sine_idx)) 
 		sine_idx += incr
 		if sine_idx > 1{
 			sine_idx -= 1
@@ -198,56 +195,22 @@ rl.SetAudioStreamCallback(stream,audio_callback_proc)
 
 data := make([]byte,max_samples)
 write_buf := make([]byte,max_samples_per_update)
-//rl.PlayAudioStream(stream)
 
 wavelength := 1
 
 for !rl.WindowShouldClose(){
-	if freq != old_freq{
-		wavelength = int(22050/freq)
-		if i32(wavelength) > max_samples/2{
-			wavelength = int(max_samples/2)
-		}
-		if wavelength < 1{
-			wavelength = 1
-		}
-
-		for i in 0..=(wavelength * 2) - 1{
-			data[i] = byte(m.sin_float(2 * m.PI * (f32(i) / f32(wavelength))) * 32000.0)
-		}
-		//make the rest of teh line is flat 
-		for j in wavelength * 2..=int(max_samples) - 1{
-			data[j] = 0
-		}
-		old_freq = freq
-	}
 	//delay timer
 	if dt > 0{
 		dt -= 1
+	}
+	//sound timer
+	if st > 0{
+		st -= 1
 		rl.PlayAudioStream(stream)
 	}else{
 		rl.StopAudioStream(stream)
 	}
-	//dt value can be read into register from fx15 and fx07
-	//sound timer
-	if st > 0{
-		//will sound buzzer when decremented
-		st -= 1
-	}
-	for nothing in 0..=10{
-		//emulate cycle
-		//st value can be set from fx18
-		//36 instructions by convention all start with even addresses
-		//each instruction is 2 bytes long
-		//MSB is first
-		//Format is CXYN or CXNN CNNN each cahar is 4 bits c is for code group 
-		//x and y are typically regisetr numbers N NN or NNN are 4 8 or 12  bit literal numbers used to set vavlues for further 
-		///identificatiion within a group
-		//pc is set to 0x200 at start of program
-
-		//CLS
-		//clears the display
-		//00E0
+	loop: for nothing in 0..=10{
 
 		opcode_msb := (u16(ram[pc]) << 8)
 		opcode_lsb := (u16(ram[pc + 1]))
@@ -260,22 +223,7 @@ for !rl.WindowShouldClose(){
 		opcode_first_byte = ((opcode_first_byte & 0xF0) >> 4)
 
 		pc += 2
-
-		//errorcheck next opcode 
-		/*
-		nopcode_msb := (u16(ram[pc]) << 8)
-		nopcode_lsb := (u16(ram[pc + 1]))
-		nopcode : u16 = (u16)(nopcode_msb | nopcode_lsb)
-		assert(nopcode != 0)
-		*/
-		assert(opcode != 0)
-		//fmt.println("opcode: ", opcode)
-		//fmt.println("nopcode: ", nopcode)
-		//fmt.println("opcode_first_byte: ", opcode_first_byte)
-		//fmt.printf("opcode: %x %x\n", opcode_first_byte, opcode_second_byte)
-		//fmt.printf("%x %x\n", opcode_first_byte, opcode_second_byte)
-		//fmt.printf("NNN para : %x\n", (opcode & 0x0FFF))
-
+		//assert(opcode != 0)
 		switch opcode_first_byte{
 			case 0x0:{
 				if opcode_second_byte == 0xE0{
@@ -492,6 +440,7 @@ for !rl.WindowShouldClose(){
 						}
 					}
 				}
+				break loop
 			}
 			case 0xE:{
 				//check for key press
@@ -521,11 +470,19 @@ for !rl.WindowShouldClose(){
 				if (opcode & 0x00FF) == 0x07{
 					v[reg_num] = dt
 				}else if (opcode & 0x00FF) == 0x0A{
-					//fmt.println("Check if key is holding process")
+					//("Check if key is holding process and released")
 					key_press := false
 					for i : u16 = 0; i < 16; i += 1{
 						if keymap[i] != 0{
-							v[reg_num] = i
+							halting_keymap[i] = 1
+						}
+					}
+					key_press = false
+					for key,i in &halting_keymap{
+						//pressed and released
+						if key == 1 && keymap[i] == 0{
+							v[reg_num] = u16(i)
+							key = 0
 							key_press = true
 						}
 					}
@@ -659,14 +616,8 @@ for !rl.WindowShouldClose(){
 
 	x,y : i32
 	for pixel,i in &display{
-		if x == 0 && y == 0{
-			rl.DrawRectangle(x,y,10,10,rl.RED)
-		}else if x == 640 - 10 && y == 320 - 10{
-			rl.DrawRectangle(x,y,10,10,rl.GREEN)
-		}else{
-			color := rl.Color{pixel,pixel,pixel,255}
-			rl.DrawRectangle(x,y,10,10,color)
-		}
+		color := rl.Color{pixel,pixel,pixel,255}
+		rl.DrawRectangle(x,y,10,10,color)
 		x += 10
 		//after 32 pixels go to next line
 		if x % 640 == 0{
